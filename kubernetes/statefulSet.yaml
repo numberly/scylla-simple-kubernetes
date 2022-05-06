@@ -1,0 +1,64 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: scylla
+  namespace: default
+  labels:
+    component: database
+    environment: development
+    name: scylla
+spec:
+  serviceName: scylla
+  replicas: 1
+  selector:
+    matchLabels:
+      component: database
+      environment: development
+      name: scylla
+  template:
+    metadata:
+      labels:
+        component: database
+        environment: development
+        name: scylla
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
+        kubernetes.io/os: linux
+      securityContext:
+        runAsUser: 107 # nobody
+        fsGroup: 107
+      volumes:
+      - name: data
+        emptyDir: {}
+      - name: config-envoy
+        configMap:
+          name: scylla
+      containers:
+      - name: scylladb
+        image: "scylla:4.6.2-nonroot"
+        args: ["--developer-mode", "1", "--smp", "1", "--authenticator", "PasswordAuthenticator", "--authorizer", "CassandraAuthorizer"]
+        resources:
+          requests:
+            memory: "512Mi"
+          limits:
+            memory: "512Mi"
+        ports:
+        - containerPort: 9042
+        volumeMounts:
+        - mountPath: /var/lib/scylla
+          name: data
+      - name: proxy
+        image: envoyproxy/envoy:v1.21.2
+        resources:
+          requests:
+            memory: "128Mi"
+          limits:
+            memory: "128Mi"
+        ports:
+        - containerPort: 9043
+        volumeMounts:
+        - name: config-envoy
+          mountPath: /etc/envoy/envoy.yaml
+          subPath: config.yaml
